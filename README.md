@@ -12,5 +12,5 @@
 ## 🛠 Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/pet-sentiment-classifier.git
-   cd pet-sentiment-classifier
+   git clone https://github.com/aamodpaudel/CNN-Vit
+   cd CNN-Vit

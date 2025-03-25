@@ -10,9 +10,7 @@
 - **UI**: Streamlit web app for real-time predictions.
 
 - **Before Augmentation**: The subfolders had the following files size - angry had 988,
-happy had 4355
-relaxed had 1203
-sad had 844.
+happy had 4355, relaxed had 1203, sad had 844.
 
 ## 🛠 Installation
 1. Clone the repository:

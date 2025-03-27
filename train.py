@@ -3,9 +3,20 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, random_split
 import torch.nn as nn
 import torch.optim as optim
-from torchvision.models import resnet18  
+from torchvision.models import resnet18
 import json
+import argparse
+import os
 
+# Argument parsing
+parser = argparse.ArgumentParser(description='Train Hybrid CNN-ViT Model')
+parser.add_argument('--data_dir', type=str, required=True,
+                    help='Path to dataset directory')
+parser.add_argument('--epochs', type=int, default=10,
+                    help='Number of training epochs')
+parser.add_argument('--batch_size', type=int, default=32,
+                    help='Input batch size for training')
+args = parser.parse_args()
 
 class HybridCNNViT(nn.Module):
     def __init__(self, num_classes=4):
@@ -13,12 +24,11 @@ class HybridCNNViT(nn.Module):
         
         # CNN Backbone (ResNet-18)
         self.cnn = resnet18(pretrained=True)
-        self.cnn = nn.Sequential(*list(self.cnn.children())[:-2]) 
+        self.cnn = nn.Sequential(*list(self.cnn.children())[:-2])  # Fixed parenthesis
         
-       
         self.feature_projection = nn.Conv2d(
-            in_channels=512,  # ResNet-18's last layers
-            out_channels=768,  # ViT's hidden new layers
+            in_channels=512,
+            out_channels=768,
             kernel_size=1
         )
         
@@ -37,68 +47,52 @@ class HybridCNNViT(nn.Module):
             num_layers=4
         )
         
-        
         self.classifier = nn.Linear(768, num_classes)
 
     def forward(self, x):
+        features = self.cnn(x)
+        features = self.feature_projection(features)
+        features = features.flatten(2).permute(0, 2, 1)
         
-        features = self.cnn(x)  
-        
-        
-        features = self.feature_projection(features)  
-        features = features.flatten(2).permute(0, 2, 1)  
-        
-      
         cls_tokens = self.cls_token.expand(x.shape[0], -1, -1)
-        features = torch.cat((cls_tokens, features), dim=1) 
-        
-        
+        features = torch.cat((cls_tokens, features), dim=1)
         features += self.positional_embedding
         
-        
-        features = features.permute(1, 0, 2)  
+        features = features.permute(1, 0, 2)
         features = self.transformer(features)
         
-       
-        cls_output = features[0]  
+        cls_output = features[0]
         return self.classifier(cls_output)
 
+# Validate data directory
+if not os.path.isdir(args.data_dir):
+    raise ValueError(f"Data directory {args.data_dir} does not exist!")
 
-data_dir = r"D:\College\augmented_data"
+# Data loading
 train_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-full_dataset = datasets.ImageFolder(data_dir, transform=train_transform)
+full_dataset = datasets.ImageFolder(args.data_dir, transform=train_transform)
 train_size = int(0.8 * len(full_dataset))
 val_size = len(full_dataset) - train_size
 train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
 
-
+# Training setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = HybridCNNViT(num_classes=4).to(device)
-
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
 metrics = []
 
-
-
-
-
-
-
-
-for epoch in range(10):
-  
-
-   
+# Training loop
+for epoch in range(args.epochs):
     model.train()
     train_loss = 0.0
     for inputs, labels in train_loader:
@@ -112,7 +106,7 @@ for epoch in range(10):
     
     avg_train_loss = train_loss / len(train_dataset)
     
-   
+    # Validation
     model.eval()
     val_loss = 0.0
     correct = 0
@@ -130,7 +124,7 @@ for epoch in range(10):
     avg_val_loss = val_loss / len(val_dataset)
     val_accuracy = correct / total
     
-   
+    # Metrics tracking
     epoch_metrics = {
         'epoch': epoch + 1,
         'train_loss': float(avg_train_loss),
@@ -144,7 +138,7 @@ for epoch in range(10):
     print(f"  Val Loss: {avg_val_loss:.4f}")
     print(f"  Val Accuracy: {val_accuracy:.4f}\n")
 
-
+# Save results
 with open('training_metrics.json', 'w') as f:
     json.dump(metrics, f, indent=4)
 
